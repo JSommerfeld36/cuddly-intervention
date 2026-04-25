@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFP Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+  <style>
+    :root {
+      --bg:            #F9F6F2;
+      --surface:       #FFFFFF;
+      --border:        #E8E0D8;
+      --text:          #3D3530;
+      --muted:         #9C8F87;
+      --sidebar-bg:    #F2EDE7;
+      --sidebar-w:     300px;
+      --radius:        12px;
+      --radius-sm:     8px;
+
+      --c-period:      #9B4D70;
+      --c-very-low:    #90BAA0;
+      --c-low:         #7FAF8A;
+      --c-high:        #D98B6A;
+      --c-peak:        #C25C6E;
+
+      --safe-bg:       #C7EDD0;
+      --safe-fg:       #1A7A3C;
+      --caution-bg:    #FFC4BD;
+      --caution-fg:    #C01A00;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Login ── */
+    #login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 24px;
+      background: var(--bg);
+    }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 56px 48px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(61,53,48,0.07);
+    }
+    .login-logo {
+      font-family: 'Fraunces', serif;
+      font-size: 42px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -1px;
+      margin-bottom: 4px;
+    }
+    .login-logo span { color: var(--c-peak); }
+    .login-sub {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 40px;
+    }
+    .login-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 32px 0;
+    }
+    .google-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 13px 20px;
+      background: var(--c-high);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .google-btn:hover { background: var(--c-peak); }
+
+    /* ── App Shell ── */
+    #app {
+      display: none;
+      height: 100vh;
+    }
+    #app.visible {
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .sidebar-head {
+      padding: 22px 22px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo {
+      font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+    .sidebar-logo span { color: var(--c-peak); }
+    .sidebar-tagline {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .sidebar-body {
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+    }
+
+    /* ── Status Box ── */
+    .status-box {
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      transition: background 0.3s, color 0.3s;
+    }
+    .status-box.safe    { background: var(--safe-bg);    color: var(--safe-fg); }
+    .status-box.caution { background: var(--caution-bg); color: var(--caution-fg); }
+    .status-box.neutral { background: var(--border);     color: var(--muted); }
+    .status-icon { font-size: 26px; flex-shrink: 0; }
+    .status-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 1px; }
+    .status-text p  { font-size: 13px; font-weight: 500; opacity: 0.85; }
+
+    /* ── Divider / Label ── */
+    .divider { height: 1px; background: var(--border); }
+    .sec-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── Form ── */
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .form-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .form-input {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      appearance: none;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--c-high);
+      box-shadow: 0 0 0 3px rgba(217,139,106,0.15);
+    }
+    select.form-input {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%239C8F87' d='M5 7L0 2h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0 8px;
+    }
+    .check-row input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: var(--c-high);
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    .check-row label {
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary {
+      width: 100%;
+      padding: 10px;
+      background: var(--c-high);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 2px;
+    }
+    .btn-primary:hover   { background: var(--c-peak); }
+    .btn-primary:active  { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* ── Slider ── */
+    .slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .slider-val { font-size: 15px; font-weight: 700; color: var(--c-high); font-family: 'Fraunces', serif; }
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      appearance: none;
+      background: var(--border);
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--c-high);
+      cursor: pointer;
+      box-shadow: 0 1px 5px rgba(217,139,106,0.45);
+    }
+    .slider-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+    /* ── Main Panel ── */
+    .main-panel { flex: 1; display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 20px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 15px 16px 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--c-peak); border-bottom-color: var(--c-peak); font-weight: 600; }
+
+    /* ── Tab Content ── */
+    .tab-content { flex: 1; overflow-y: auto; padding: 22px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; animation: fadeUp 0.15s ease; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Chart Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 18px;
+    }
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .chart-wrap { position: relative; height: 360px; }
+
+    /* ── Toggle ── */
+    .toggle-group { display: flex; align-items: center; gap: 8px; }
+    .toggle-lbl { font-size: 11px; color: var(--muted); }
+    .toggle { position: relative; width: 34px; height: 19px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .tog-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 19px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .tog-track::before {
+      content: '';
+      position: absolute;
+      width: 13px; height: 13px;
+      left: 3px; top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle input:checked + .tog-track { background: var(--c-high); }
+    .toggle input:checked + .tog-track::before { transform: translateX(15px); }
+
+    /* ── Legend ── */
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+    .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .leg-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .leg-line { width: 18px; height: 2px; flex-shrink: 0; border-radius: 1px; }
+
+    /* ── Calendar ── */
+    .cal-month { margin-bottom: 28px; }
+    .cal-month-title {
+      font-family: 'Fraunces', serif;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cal-wd {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 3px 0 6px;
+    }
+    .cal-cell {
+      aspect-ratio: 1;
+      min-height: 50px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.1s;
+      padding: 3px;
+    }
+    .cal-cell:hover:not(.cal-empty):not(.cal-future) { background: rgba(232,224,216,0.6); }
+    .cal-cell.cal-today { background: rgba(232,224,216,0.4); }
+    .cal-cell.cal-future { opacity: 0.35; pointer-events: none; }
+    .cal-cell.cal-empty  { cursor: default; }
+    .cell-num {
+      font-size: 11px;
+      color: var(--muted);
+      position: absolute;
+      top: 4px; left: 5px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .cal-cell.cal-today .cell-num { color: var(--text); font-weight: 700; }
+    .cell-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; }
+    .cell-cd {
+      font-size: 9px;
+      color: var(--muted);
+      position: absolute;
+      bottom: 3px; right: 4px;
+      line-height: 1;
+    }
+
+    /* ── Table ── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 11px 12px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--bg);
+      color: var(--text);
+    }
+    .data-table tbody tr:hover td { background: var(--bg); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 100px;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* ── Stat Cards ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+    .stat-val {
+      font-family: 'Fraunces', serif;
+      font-size: 30px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .stat-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Pagination ── */
+    .pager { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+    .pager button {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text);
+      transition: background 0.1s;
+    }
+    .pager button:hover:not(:disabled) { background: var(--bg); }
+    .pager button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 22px; right: 22px;
+      background: var(--text);
+      color: white;
+      padding: 11px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+      z-index: 999;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+    .toast.show  { opacity: 1; transform: translateY(0); }
+    .toast.ok    { background: #2D6A4F; }
+    .toast.err   { background: #C01A00; }
+
+    /* ── Popover ── */
+    .popover {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 15px;
+      box-shadow: 0 6px 24px rgba(61,53,48,0.12);
+      z-index: 200;
+      font-size: 13px;
+      min-width: 165px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .popover.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+    /* ── Spinner / Empty ── */
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+    .spinner { width: 22px; height: 22px; border: 2px solid var(--border); border-top-color: var(--c-high); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile ── */
+    .mobile-menu-btn {
+      display: none;
+      position: fixed;
+      bottom: 20px; left: 20px;
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: var(--c-high);
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(217,139,106,0.5);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+    }
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(61,53,48,0.3);
+      z-index: 100;
+    }
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        left: 0; top: 0;
+        height: 100vh;
+        z-index: 150;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.show { display: block; }
+      .mobile-menu-btn { display: flex; }
+      .chart-wrap { height: 280px; }
+      .tab-btn { padding: 13px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Login ─── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">NFP<span>•</span></div>
+    <p class="login-sub">Cycle tracker for the Sommerfeld household</p>
+    <div class="login-divider"></div>
+    <button class="google-btn" id="sign-in-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path fill="white" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="white" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="white" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+        <path fill="white" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Sign in with Google
+    </button>
+  </div>
+</div>
+
+<!-- ─── App ─── -->
+<div id="app">
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-logo">NFP<span>•</span>Tracker</div>
+      <div class="sidebar-tagline">Natural Family Planning</div>
+    </div>
+    <div class="sidebar-body">
+
+      <!-- Status -->
+      <div id="status-box" class="status-box neutral">
+        <div class="status-icon" id="status-icon">⏳</div>
+        <div class="status-text">
+          <h3>Should we??</h3>
+          <p id="status-val">Loading…</p>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Entry Form -->
+      <div>
+        <div class="sec-label">Add New Entry</div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" id="f-date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cycle Number</label>
+          <input type="number" id="f-cycle-num" class="form-input" min="1">
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="f-cycle-start">
+          <label for="f-cycle-start">Cycle Start (Day 1)</label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Test Level</label>
+          <select id="f-level" class="form-input">
+            <option value="">— Select —</option>
+            <option value="Period">Period</option>
+            <option value="Very Low">Very Low</option>
+            <option value="Low">Low</option>
+            <option value="High">High</option>
+            <option value="Peak">Peak</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="add-btn">Add Entry</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Cycles Slider -->
+      <div>
+        <div class="sec-label">Cycles to Display</div>
+        <div class="slider-row">
+          <span style="font-size:12px;color:var(--muted)">Comparison view</span>
+          <span class="slider-val" id="cycles-val">7</span>
+        </div>
+        <input type="range" id="cycles-slider" min="1" max="12" value="7">
+        <div class="slider-ticks"><span>1</span><span>6</span><span>12</span></div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Main Panel -->
+  <main class="main-panel">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="cycle">This Cycle</button>
+      <button class="tab-btn" data-tab="compare">Compare</button>
+      <button class="tab-btn" data-tab="calendar">Calendar</button>
+      <button class="tab-btn" data-tab="entries">Entries</button>
+      <button class="tab-btn" data-tab="summary">Summary</button>
+    </div>
+
+    <div class="tab-content">
+
+      <!-- This Cycle -->
+      <div class="tab-pane active" id="tab-cycle">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Current Cycle · Fertility Trajectory</div>
+            <div class="toggle-group">
+              <span class="toggle-lbl">Show prediction</span>
+              <label class="toggle">
+                <input type="checkbox" id="show-pred" checked>
+                <div class="tog-track"></div>
+              </label>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-cycle"></canvas></div>
+          <div class="legend" id="leg-cycle"></div>
+        </div>
+      </div>
+
+      <!-- Compare -->
+      <div class="tab-pane" id="tab-compare">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">Cycle Comparison · All Cycles Overlaid</div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-compare"></canvas></div>
+          <div class="legend">
+            <div class="leg-item">
+              <div class="leg-line" style="background:#C4B8B0;opacity:0.6;"></div>
+              Previous cycles
+            </div>
+            <div class="leg-item">
+              <div class="leg-line" style="background:var(--c-high);height:3px;"></div>
+              Current cycle
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar -->
+      <div class="tab-pane" id="tab-calendar">
+        <div id="cal-container">
+          <div class="empty-state"><div class="spinner"></div>Loading calendar…</div>
+        </div>
+      </div>
+
+      <!-- Entries -->
+      <div class="tab-pane" id="tab-entries">
+        <div class="card">
+          <div class="card-head"><div class="card-title">All Entries</div></div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Cycle</th>
+                <th>Day</th>
+                <th>Level</th>
+                <th>Start?</th>
+              </tr>
+            </thead>
+            <tbody id="entries-body"></tbody>
+          </table>
+          <div class="pager" id="entries-pager"></div>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="tab-pane" id="tab-summary">
+        <div class="stat-grid" id="stat-grid"></div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Last 6 Cycles</div></div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cycle #</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Length</th>
+                <th>Peak Day</th>
+              </tr>
+            </thead>
+            <tbody id="summary-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Mobile menu btn -->
+<button class="mobile-menu-btn" id="mobile-menu">☰</button>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Calendar popover -->
+<div class="popover" id="popover"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  Config
+// ═══════════════════════════════════════════════════════
+const CLIENT_ID  = '138332157319-v2mgt3084kcui4ufdsc1nd7p974uarth.apps.googleusercontent.com';
+const SHEET_ID   = '1Pqn-gXTn4Bo739gGv_DHBg8DKNpXau8pmDOgoqyc6QI';
+const SHEET_NAME = 'Sheet1';
+const API        = 'https://sheets.googleapis.com/v4/spreadsheets';
+
+// ═══════════════════════════════════════════════════════
+//  Level definitions
+// ═══════════════════════════════════════════════════════
+const LEVELS = {
+  'Period':   { v: 0, color: '#9B4D70', bg: '#F5E8EF' },
+  'Very Low': { v: 1, color: '#90BAA0', bg: '#EDF5F0' },
+  'Low':      { v: 2, color: '#7FAF8A', bg: '#EBF4EE' },
+  'High':     { v: 3, color: '#D98B6A', bg: '#FBF0EB' },
+  'Peak':     { v: 4, color: '#C25C6E', bg: '#F9ECF0' },
+};
+const LEVEL_KEYS = ['Period', 'Very Low', 'Low', 'High', 'Peak'];
+
+// ═══════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════
+let token      = null;
+let allData    = [];
+let chartCycle = null;
+let chartCmp   = null;
+let entriesPage = 1;
+const PER_PAGE = 10;
+
+// ═══════════════════════════════════════════════════════
+//  Auth
+// ═══════════════════════════════════════════════════════
+let tokenClient;
+
+function waitForGIS() {
+  if (window.google?.accounts?.oauth2) { initAuth(); return; }
+  setTimeout(waitForGIS, 80);
+}
+window.addEventListener('load', waitForGIS);
+
+function initAuth() {
+  document.getElementById('sign-in-btn').onclick = () => {
+    window.location.href = '/api/auth';
+  };
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+
+  if (code) {
+    fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          document.getElementById('login-screen').style.display = 'none';
+          document.getElementById('app').classList.add('visible');
+          loadData();
+        } else {
+          throw new Error('Authentication failed');
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        toast('Authentication failed', 'err');
+      });
+  }
+}
+
+async function loadData() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('No token found');
+
+    const res = await fetch('/api/sheets', {
+      headers: { token },
+    });
+
+    if (!res.ok) throw new Error('Failed to fetch data');
+    const json = await res.json();
+
+    allData = parseRows(json.values || []);
+    refreshAll();
+  } catch (e) {
+    toast('Failed to load data. Check console.', 'err');
+    console.error(e);
+  }
+}
+
+function parseRows(rows) {
+  if (rows.length < 2) return [];
+  return rows.slice(1).map(r => ({
+    date:         parseDate(r[0] || ''),
+    cycle_number: parseInt(r[1]) || 0,
+    cycle_start:  (r[2] || '').toUpperCase() === 'TRUE',
+    test_level:   r[3] || '',
+    cycle_day:    parseInt(r[4]) || 0,
+  })).filter(r => r.date && r.cycle_number && LEVELS[r.test_level]);
+}
+
+function parseDate(s) {
+  const d = new Date(s.split(' ')[0] + 'T00:00:00');
+  return isNaN(d) ? null : d;
+}
+
+function fmtDate(d, opts = {}) {
+  if (!d) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', ...opts });
+}
+
+function fmtShort(d) {
+  if (!d) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function toSheetDate(d) {
+  const [y, m, day] = [d.getFullYear(), d.getMonth()+1, d.getDate()];
+  return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')} 00:00:00`;
+}
+
+async function appendRow(vals) {
+  const range = encodeURIComponent(`${SHEET_NAME}!A:E`);
+  const url   = `${API}/${SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  const res   = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: [vals] })
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// ═══════════════════════════════════════════════════════
+//  Refresh All
+// ═══════════════════════════════════════════════════════
+function refreshAll() {
+  allData.sort((a,b) => a.date - b.date);
+  updateStatus();
+  fillFormDefaults();
+  renderCycleChart();
+  renderCompareChart();
+  renderCalendar();
+  renderEntries();
+  renderSummary();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Status Box  ("Should we??")
+// ═══════════════════════════════════════════════════════
+function updateStatus() {
+  const box  = document.getElementById('status-box');
+  const icon = document.getElementById('status-icon');
+  const val  = document.getElementById('status-val');
+
+  if (!allData.length) return;
+
+  const cycles = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
+  const last7  = cycles.slice(-7);
+  const last6  = cycles.slice(-6);
+  const curr   = cycles[cycles.length - 1];
+
+  const peakDays7 = allData
+    .filter(d => last7.includes(d.cycle_number) && d.test_level === 'Peak')
+    .map(d => d.cycle_day);
+  const peakDays6 = allData
+    .filter(d => last6.includes(d.cycle_number) && d.test_level === 'Peak')
+    .map(d => d.cycle_day);
+
+  if (!peakDays7.length && !peakDays6.length) {
+    box.className = 'status-box neutral';
+    icon.textContent = '❓';
+    val.textContent = 'no peak data yet';
+    return;
+  }
+
+  const minPeak = peakDays7.length ? Math.min(...peakDays7) - 6 : 999;
+  const maxPeak = peakDays6.length ? Math.max(...peakDays6) + 3 : 0;
+
+  const currDay = Math.max(...allData
+    .filter(d => d.cycle_number === curr)
+    .map(d => d.cycle_day));
+
+  const safe = currDay < minPeak || currDay > maxPeak;
+
+  box.className  = `status-box ${safe ? 'safe' : 'caution'}`;
+  icon.textContent = safe ? '✅' : '⚠️';
+  val.textContent  = safe ? 'go for it!' : 'team no kids';
+}
+
+// ═══════════════════════════════════════════════════════
+//  Form
+// ═══════════════════════════════════════════════════════
+function fillFormDefaults() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value = today;
+  if (allData.length) {
+    const max = Math.max(...allData.map(d => d.cycle_number));
+    document.getElementById('f-cycle-num').value = max;
+  }
+}
+
+document.getElementById('f-cycle-start').addEventListener('change', function() {
+  if (!allData.length) return;
+  const max = Math.max(...allData.map(d => d.cycle_number));
+  document.getElementById('f-cycle-num').value = this.checked ? max + 1 : max;
+});
+
+function calcCycleDay(date, cycleNum) {
+  const startEntry = allData
+    .filter(d => d.cycle_number === cycleNum && d.cycle_start)
+    .sort((a,b) => a.date - b.date)[0];
+  if (!startEntry) return 1;
+  return Math.round((date - startEntry.date) / 86400000) + 1;
+}
+
+document.getElementById('add-btn').addEventListener('click', async () => {
+  const dateStr  = document.getElementById('f-date').value;
+  const cycleNum = parseInt(document.getElementById('f-cycle-num').value);
+  const isStart  = document.getElementById('f-cycle-start').checked;
+  const level    = document.getElementById('f-level').value;
+
+  if (!dateStr || !cycleNum || !level) { toast('Please fill in all fields', 'err'); return; }
+
+  const date     = new Date(dateStr + 'T00:00:00');
+  const cycleDay = isStart ? 1 : Math.max(1, calcCycleDay(date, cycleNum));
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    await appendRow([toSheetDate(date), cycleNum, isStart ? 'TRUE' : 'FALSE', level, cycleDay]);
+
+    allData.push({ date, cycle_number: cycleNum, cycle_start: isStart, test_level: level, cycle_day: cycleDay });
+    toast('Entry added!', 'ok');
+
+    document.getElementById('f-cycle-start').checked = false;
+    document.getElementById('f-level').value = '';
+    refreshAll();
+  } catch(e) {
+    toast('Save failed — see console', 'err');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add Entry';
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  Slider
+// ═══════════════════════════════════════════════════════
+document.getElementById('cycles-slider').addEventListener('input', function() {
+  document.getElementById('cycles-val').textContent = this.value;
+  renderCompareChart();
+});
+
+// ═══════════════════════════════════════════════════════
+//  Tabs
+// ═══════════════════════════════════════════════════════
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    setTimeout(() => {
+      if (btn.dataset.tab === 'cycle'   && chartCycle)  chartCycle.resize();
+      if (btn.dataset.tab === 'compare' && chartCmp)    chartCmp.resize();
+    }, 50);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+//  Chart helpers
+// ═══════════════════════════════════════════════════════
+function lvlColor(label) { return LEVELS[label]?.color || '#C4B8B0'; }
+function lvlVal(label)   { return LEVELS[label]?.v ?? 0; }
+
+function blend(h1, h2, t) {
+  const p = s => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  const [r1,g1,b1] = p(h1), [r2,g2,b2] = p(h2);
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+}
+
+function segColor(pts) {
+  return (ctx) => {
+    const i = ctx.p0DataIndex;
+    if (i == null || i >= pts.length - 1) return lvlColor(pts[i]?.label);
+    return blend(lvlColor(pts[i].label), lvlColor(pts[i+1].label), 0.5);
+  };
+}
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'point', intersect: true },
+  plugins: { legend: { display: false } },
+};
+
+function yScaleConfig() {
+  return {
+    min: -0.5, max: 4.5,
+    ticks: {
+      color: '#9C8F87', font: { size: 11, family: 'DM Sans' },
+      stepSize: 1,
+      callback: v => (Number.isInteger(v) && v >= 0 && v <= 4) ? LEVEL_KEYS[v] : '',
+    },
+    grid: { color: '#F2EDE7' },
+    border: { display: false },
+  };
+}
+
+function tooltipConfig() {
+  return {
+    backgroundColor: 'white',
+    titleColor: '#3D3530',
+    bodyColor: '#9C8F87',
+    borderColor: '#E8E0D8',
+    borderWidth: 1,
+    padding: 12,
+    cornerRadius: 8,
+    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  Chart 1 — This Cycle
+// ═══════════════════════════════════════════════════════
+function renderCycleChart() {
+  if (!allData.length) return;
+
+  const cycles  = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
+  const currNum = cycles[cycles.length - 1];
+  const histNums = cycles.slice(0,-1).slice(-6);
+
+  const currData = allData
+    .filter(d => d.cycle_number === currNum)
+    .sort((a,b) => a.cycle_day - b.cycle_day);
+
+  if (!currData.length) return;
+
+  const logged = currData.map(d => ({
+    x: d.cycle_day, y: lvlVal(d.test_level),
+    label: d.test_level, date: d.date, cycle_day: d.cycle_day,
+  }));
+
+  // Prediction
+  const showPred = document.getElementById('show-pred').checked;
+  let predicted  = [];
+
+  if (showPred && histNums.length >= 2) {
+    const lastDay = Math.max(...currData.map(d => d.cycle_day));
+    const avgLen  = avgCycleLen(cycles);
+    const until   = Math.min(avgLen, 35);
+
+    for (let day = lastDay + 1; day <= until; day++) {
+      const lvl = predictLvl(day, histNums);
+      if (lvl === null) break;
+      const base = currData[currData.length - 1].date;
+      const pd   = new Date(base);
+      pd.setDate(pd.getDate() + (day - lastDay));
+      predicted.push({ x: day, y: lvlVal(lvl), label: lvl, date: pd, cycle_day: day, pred: true });
+    }
+  }
+
+  const ctx = document.getElementById('chart-cycle').getContext('2d');
+  if (chartCycle) chartCycle.destroy();
+
+  chartCycle = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Logged',
+          data: logged,
+          borderColor: '#D98B6A',
+          borderWidth: 2.5,
+          segment:          { borderColor: segColor(logged) },
+          pointBackgroundColor: logged.map(p => lvlColor(p.label)),
+          pointBorderColor: 'white',
+          pointBorderWidth: 2,
+          pointRadius: 7,
+          pointHoverRadius: 10,
+          tension: 0.3,
+        },
+        {
+          label: 'Predicted',
+          data: predicted,
+          borderColor: '#C4B8B0',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          segment:         { borderColor: segColor(predicted) },
+          pointBackgroundColor: 'white',
+          pointBorderColor: predicted.map(p => lvlColor(p.label)),
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 9,
+          tension: 0.3,
+          borderDashOffset: 0,
+        }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          ...tooltipConfig(),
+          callbacks: {
+            title: items => fmtDate(items[0].raw.date, { month: 'long', day: 'numeric', year: undefined }),
+            label: item  => {
+              const p = item.raw;
+              return [`  Day ${p.cycle_day} of cycle`, `  ${p.label}${p.pred ? ' (predicted)' : ''}`];
+            },
+            labelColor: item => ({
+              borderColor: lvlColor(item.raw.label),
+              backgroundColor: lvlColor(item.raw.label),
+              borderRadius: 3,
+            }),
+          }
+        },
+        annotation: { annotations: buildTodayLine(currData) },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: {
+            color: '#9C8F87', font: { size: 11, family: 'DM Sans' },
+            callback: v => Number.isInteger(v) ? `Day ${v}` : '',
+            stepSize: 1,
+          },
+          grid: { color: '#F2EDE7' },
+          border: { display: false },
+        },
+        y: yScaleConfig(),
+      }
+    }
+  });
+
+  // Legend
+  const leg = document.getElementById('leg-cycle');
+  leg.innerHTML = LEVEL_KEYS.map(k => `
+    <div class="leg-item">
+      <div class="leg-dot" style="background:${lvlColor(k)}"></div>
+      ${k}
+    </div>`).join('');
+
+  if (showPred && predicted.length) {
+    leg.innerHTML += `<div class="leg-item" style="margin-left:8px;padding-left:8px;border-left:1px solid var(--border)">
+      <div class="leg-line" style="background:#C4B8B0;border-top:2px dashed #C4B8B0;height:0;margin-top:1px;"></div>
+      Predicted
+    </div>`;
+  }
+
+  document.getElementById('show-pred').onchange = renderCycleChart;
+}
+
+function buildTodayLine(currData) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const entry = currData.find(d => {
+    const dt = new Date(d.date); dt.setHours(0,0,0,0);
+    return dt.getTime() === today.getTime();
+  });
+  if (!entry) return {};
+  return {
+    today: {
+      type: 'line',
+      xMin: entry.cycle_day, xMax: entry.cycle_day,
+      borderColor: '#C4B8B0', borderWidth: 1.5, borderDash: [4, 4],
+      label: { display: true, content: 'Today', position: 'start',
+               backgroundColor: 'transparent', color: '#9C8F87', font: { size: 11 } }
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  Prediction helpers
+// ═══════════════════════════════════════════════════════
+function predictLvl(day, histNums) {
+  const hist = allData.filter(d => histNums.includes(d.cycle_number) && d.cycle_day === day);
+  if (hist.length < 2) return null;
+  const freq = {};
+  hist.forEach(d => { freq[d.test_level] = (freq[d.test_level] || 0) + 1; });
+  const max   = Math.max(...Object.values(freq));
+  const modes = Object.keys(freq).filter(k => freq[k] === max);
+  if (modes.length === 1) return modes[0];
+  const avg = hist.reduce((s,d) => s + lvlVal(d.test_level), 0) / hist.length;
+  return LEVEL_KEYS[Math.round(avg)] || 'Low';
+}
+
+function avgCycleLen(cycles) {
+  const lens = cycles.slice(0,-1).map(cn => {
+    const days = allData.filter(d => d.cycle_number === cn).map(d => d.cycle_day);
+    return days.length ? Math.max(...days) : null;
+  }).filter(Boolean);
+  return lens.length ? Math.round(lens.reduce((s,l)=>s+l,0)/lens.length) : 30;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Chart 2 — Compare Cycles
+// ═══════════════════════════════════════════════════════
+function renderCompareChart() {
+  if (!allData.length) return;
+
+  const n      = parseInt(document.getElementById('cycles-slider').value);
+  const cycles = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
+  const shown  = cycles.slice(-n);
+  const curr   = cycles[cycles.length - 1];
+  const datasets = [];
+
+  // Historical (grey)
+  shown.filter(cn => cn !== curr).forEach(cn => {
+    const pts = allData
+      .filter(d => d.cycle_number === cn)
+      .sort((a,b) => a.cycle_day - b.cycle_day)
+      .map(d => ({ x: d.cycle_day, y: lvlVal(d.test_level), label: d.test_level, date: d.date, cycle_day: d.cycle_day }));
+
+    const start = allData.find(d => d.cycle_number === cn && d.cycle_start);
+    const len   = Math.max(...pts.map(p=>p.x));
+
+    datasets.push({
+      label: `${start ? fmtShort(start.date) : 'Cycle '+cn} · ${len} days`,
+      data: pts,
+      borderColor: '#C4B8B0',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.3,
+      _hist: true,
+      _cn: cn,
+    });
+  });
+
+  // Current (coloured)
+  const currPts = allData
+    .filter(d => d.cycle_number === curr)
+    .sort((a,b) => a.cycle_day - b.cycle_day)
+    .map(d => ({ x: d.cycle_day, y: lvlVal(d.test_level), label: d.test_level, date: d.date, cycle_day: d.cycle_day }));
+
+  datasets.push({
+    label: 'Current',
+    data: currPts,
+    borderColor: '#D98B6A',
+    borderWidth: 3,
+    segment: { borderColor: segColor(currPts) },
+    pointBackgroundColor: currPts.map(p => lvlColor(p.label)),
+    pointBorderColor: 'white',
+    pointBorderWidth: 2,
+    pointRadius: 7,
+    pointHoverRadius: 10,
+    tension: 0.3,
+  });
+
+  const ctx = document.getElementById('chart-compare').getContext('2d');
+  if (chartCmp) chartCmp.destroy();
+
+  chartCmp = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      ...CHART_DEFAULTS,
+      parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          ...tooltipConfig(),
+          callbacks: {
+            title: items => items[0].dataset._hist ? items[0].dataset.label : fmtDate(items[0].raw.date, { month: 'long', day: 'numeric', year: undefined }),
+            label: item  => {
+              const p = item.raw;
+              if (item.dataset._hist) return `Day ${p.x}`;
+              return [`  Day ${p.cycle_day}`, `  ${p.label}`];
+            },
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: {
+            color: '#9C8F87', font: { size: 11, family: 'DM Sans' },
+            callback: v => Number.isInteger(v) ? `Day ${v}` : '',
+            stepSize: 5,
+          },
+          grid: { color: '#F2EDE7' },
+          border: { display: false },
+        },
+        y: yScaleConfig(),
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Calendar
+// ═══════════════════════════════════════════════════════
+function renderCalendar() {
+  const container = document.getElementById('cal-container');
+  if (!allData.length) { container.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+
+  // Build date→entry map
+  const byDate = {};
+  allData.forEach(d => {
+    const k = dateKey(d.date);
+    if (!byDate[k]) byDate[k] = d;
+  });
+
+  const today   = new Date(); today.setHours(0,0,0,0);
+  const minDate = new Date(Math.min(...allData.map(d=>d.date)));
+  const WDS     = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  // Build months from newest → oldest
+  const months = [];
+  let cur = new Date(today.getFullYear(), today.getMonth(), 1);
+  const floor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  while (cur >= floor) { months.push(new Date(cur)); cur.setMonth(cur.getMonth()-1); }
+
+  let html = '';
+  months.forEach(m => {
+    const title   = m.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const dim     = new Date(m.getFullYear(), m.getMonth()+1, 0).getDate();
+    const firstWd = (new Date(m.getFullYear(), m.getMonth(), 1).getDay() + 6) % 7; // Mon=0
+
+    html += `<div class="cal-month"><div class="cal-month-title">${title}</div><div class="cal-grid">`;
+    WDS.forEach(d => { html += `<div class="cal-wd">${d}</div>`; });
+    for (let i=0; i<firstWd; i++) html += `<div class="cal-cell cal-empty"></div>`;
+
+    for (let day=1; day<=dim; day++) {
+      const cd   = new Date(m.getFullYear(), m.getMonth(), day);
+      cd.setHours(0,0,0,0);
+      const k    = dateKey(cd);
+      const entry = byDate[k];
+      const isToday   = cd.getTime() === today.getTime();
+      const isFuture  = cd > today;
+      const isEmpty   = !entry;
+
+      let cls = 'cal-cell';
+      if (isToday)  cls += ' cal-today';
+      if (isFuture) cls += ' cal-future';
+      if (isEmpty)  cls += ' cal-empty';
+
+      html += `<div class="${cls}" data-k="${k}">
+        <span class="cell-num">${day}</span>
+        ${entry ? `<div class="cell-dot" style="background:${lvlColor(entry.test_level)}"></div>` : ''}
+        ${entry ? `<span class="cell-cd">D${entry.cycle_day}</span>` : ''}
+      </div>`;
+    }
+    html += `</div></div>`;
+  });
+
+  container.innerHTML = html;
+
+  // Click handlers
+  container.querySelectorAll('.cal-cell:not(.cal-empty)').forEach(cell => {
+    cell.addEventListener('click', e => showPopover(e, cell.dataset.k, byDate));
+  });
+}
+
+function showPopover(e, k, byDate) {
+  const entry = byDate[k];
+  if (!entry) return;
+  const pop   = document.getElementById('popover');
+  const color = lvlColor(entry.test_level);
+
+  pop.innerHTML = `
+    <div style="font-weight:700;color:var(--text);margin-bottom:4px">
+      📅 ${fmtDate(entry.date, { month: 'long', day: 'numeric', year: undefined })}
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+      Day ${entry.cycle_day} · Cycle ${entry.cycle_number}
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block"></span>
+      ${entry.test_level}
+    </div>`;
+
+  const rect = e.target.getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  pop.style.top  = (rect.bottom + 8) + 'px';
+  pop.classList.add('show');
+
+  setTimeout(() => {
+    document.addEventListener('click', () => pop.classList.remove('show'), { once: true });
+  }, 10);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Entries Table
+// ═══════════════════════════════════════════════════════
+function renderEntries() {
+  const sorted = [...allData].sort((a,b) => b.date - a.date);
+  const total  = sorted.length;
+  const pages  = Math.ceil(total / PER_PAGE);
+  entriesPage  = Math.max(1, Math.min(entriesPage, pages));
+  const slice  = sorted.slice((entriesPage-1)*PER_PAGE, entriesPage*PER_PAGE);
+
+  document.getElementById('entries-body').innerHTML = slice.map(d => {
+    const c = lvlColor(d.test_level);
+    const b = LEVELS[d.test_level]?.bg || '#f0f0f0';
+    return `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td>${d.cycle_number}</td>
+      <td>Day ${d.cycle_day}</td>
+      <td><span class="badge" style="background:${b};color:${c}">
+        <span class="badge-dot" style="background:${c}"></span>${d.test_level}
+      </span></td>
+      <td>${d.cycle_start ? '✓' : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('entries-pager').innerHTML = `
+    <button ${entriesPage<=1?'disabled':''} onclick="goPage(${entriesPage-1})">← Prev</button>
+    <span>${entriesPage} / ${pages}</span>
+    <button ${entriesPage>=pages?'disabled':''} onclick="goPage(${entriesPage+1})">Next →</button>`;
+}
+
+function goPage(p) { entriesPage = p; renderEntries(); }
+
+// ═══════════════════════════════════════════════════════
+//  Summary
+// ═══════════════════════════════════════════════════════
+function renderSummary() {
+  if (!allData.length) return;
+
+  const cycles = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
+  const last6  = cycles.slice(-6);
+  const curr   = cycles[cycles.length - 1];
+  const currDay = Math.max(...allData.filter(d=>d.cycle_number===curr).map(d=>d.cycle_day));
+
+  const rows = last6.map(cn => {
+    const cd     = allData.filter(d=>d.cycle_number===cn).sort((a,b)=>a.date-b.date);
+    const start  = cd.find(d=>d.cycle_start);
+    const sDate  = start?.date || cd[0]?.date;
+    const eDate  = cd[cd.length-1]?.date;
+    const len    = (sDate && eDate) ? Math.round((eDate-sDate)/86400000)+1 : null;
+    const peak   = cd.find(d=>d.test_level==='Peak');
+    return { cn, sDate, eDate, len, peakDay: peak?.cycle_day };
+  });
+
+  // Stat cards
+  const completeLens = rows.filter(r=>r.len).map(r=>r.len);
+  const avgLen = completeLens.length ? Math.round(completeLens.reduce((s,l)=>s+l,0)/completeLens.length) : null;
+  const peakDays = rows.filter(r=>r.peakDay).map(r=>r.peakDay);
+  const avgPeak  = peakDays.length ? Math.round(peakDays.reduce((s,d)=>s+d,0)/peakDays.length) : null;
+
+  document.getElementById('stat-grid').innerHTML = [
+    { val: curr,     lbl: 'Current Cycle' },
+    { val: `Day ${currDay}`, lbl: "Today's Cycle Day" },
+    { val: avgLen ? `${avgLen}d` : '—', lbl: 'Avg Cycle Length' },
+    { val: avgPeak ? `Day ${avgPeak}` : '—', lbl: 'Avg Peak Day' },
+  ].map(s => `
+    <div class="stat-card">
+      <div class="stat-val">${s.val}</div>
+      <div class="stat-lbl">${s.lbl}</div>
+    </div>`).join('');
+
+  // Summary table
+  document.getElementById('summary-body').innerHTML = rows.map(r => `<tr>
+    <td>${r.cn}</td>
+    <td>${r.sDate ? fmtDate(r.sDate) : '—'}</td>
+    <td>${r.eDate ? fmtDate(r.eDate) : '—'}</td>
+    <td>${r.len ? `${r.len} days` : '—'}</td>
+    <td>${r.peakDay ? `Day ${r.peakDay}` : '—'}</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  Toast
+// ═══════════════════════════════════════════════════════
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Mobile Sidebar
+// ═══════════════════════════════════════════════════════
+document.getElementById('mobile-menu').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+});
+document.getElementById('sidebar-overlay').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+});
+
+// ═══════════════════════════════════════════════════════
+//  Utilities
+// ═══════════════════════════════════════════════════════
+function uniq(arr) { return [...new Set(arr)]; }
+function dateKey(d) {
+  if (!d) return '';
+  const dt = new Date(d); dt.setHours(0,0,0,0);
+  return dt.toISOString().split('T')[0];
+}
+</script>
+</body>
+</html>

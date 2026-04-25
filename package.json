@@ -1,0 +1,9 @@
+{
+  "name": "nfp-tracker",
+  "version": "1.0.0",
+  "description": "Natural Family Planning Tracker",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "googleapis": "^118.0.0"
+  }
+}
