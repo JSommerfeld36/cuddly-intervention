@@ -1,4 +1,32 @@
-.vercel
+.vercel/
+
+# Node
+node_modules/
+
+# Environment files / secrets
+.env
 .env.local
-.env*.local
-/node_modules
+.env.*.local
+
+# Server token store (do not commit refresh tokens)
+data/tokens.json
+
+# Build / output
+dist/
+build/
+out/
+.next/
+
+# Logs / cache
+logs/
+*.log
+.cache/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Service account / key files
+service-account-*.json
+*.service-account.json
