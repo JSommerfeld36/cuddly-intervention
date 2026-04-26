@@ -4,7 +4,8 @@ require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-let baseUrl = process.env.VERCEL_URL || 'http://localhost:3000';
+// Prefer an explicit stable redirect base for OAuth flows
+let baseUrl = process.env.OAUTH_REDIRECT_BASE || process.env.VERCEL_URL || 'http://localhost:3000';
 if (!/^https?:\/\//i.test(baseUrl)) baseUrl = 'http://' + baseUrl;
 const REDIRECT_URI = `${baseUrl.replace(/\/$/, '')}/api/auth`;
 const SHEET_ID = process.env.SHEET_ID;

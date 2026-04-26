@@ -800,7 +800,8 @@ window.addEventListener('load', waitForGIS);
 
 function initAuth() {
   document.getElementById('sign-in-btn').onclick = () => {
-    window.location.href = '/api/auth';
+    const returnTo = window.location.origin;
+    window.location.href = `/api/auth?returnTo=${encodeURIComponent(returnTo)}`;
   };
 
   const urlParams = new URLSearchParams(window.location.search);

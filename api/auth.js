@@ -5,7 +5,10 @@ require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
-let baseUrl = process.env.VERCEL_URL || 'http://localhost:3000';
+// Prefer an explicit stable redirect base. Set `OAUTH_REDIRECT_BASE` in production
+// to your stable domain (e.g. https://cuddly-intervention.vercel.app). Fallback
+// to VERCEL_URL or localhost for local dev.
+let baseUrl = process.env.OAUTH_REDIRECT_BASE || process.env.VERCEL_URL || 'http://localhost:3000';
 if (!/^https?:\/\//i.test(baseUrl)) baseUrl = 'http://' + baseUrl;
 const REDIRECT_URI = `${baseUrl.replace(/\/$/, '')}/api/auth`;
 const ALLOWED_EMAILS = ['joel.sommerfeld36@gmail.com', 'amandamariegordon17@gmail.com'];
@@ -18,12 +21,19 @@ const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 
 async function handler(req, res) {
   if (req.method === 'GET') {
-    const { code } = req.query || {};
+    const { code, state, returnTo } = req.query || {};
+
+    // If Google redirected back with a code, forward to the original requester
     if (code) {
-      console.log('Received code from Google, forwarding to frontend');
-      const forwardUrl = `/?code=${encodeURIComponent(code)}`;
+      const forwardTo = state ? decodeURIComponent(state) : (returnTo || '/');
+      console.log('Received code from Google, forwarding to:', forwardTo);
+      const forwardUrl = `${forwardTo.replace(/\/$/, '')}/?code=${encodeURIComponent(code)}`;
       return res.redirect(forwardUrl);
     }
+
+    // Start auth: accept an optional `returnTo` query param, embed into state
+    const clientReturnTo = returnTo || req.query.returnTo || '';
+    const stateValue = clientReturnTo ? encodeURIComponent(clientReturnTo) : undefined;
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -34,6 +44,7 @@ async function handler(req, res) {
         'profile',
       ],
       prompt: 'consent',
+      state: stateValue,
     });
     console.log('Generated auth URL:', authUrl);
     console.log('Using redirect URI:', REDIRECT_URI);
