@@ -790,7 +790,7 @@
       <div class="tab-pane" id="tab-summary">
         <div class="stat-grid" id="stat-grid"></div>
         <div class="card">
-          <div class="card-head"><div class="card-title">Last 6 Cycles</div></div>
+          <div class="card-head"><div class="card-title" id="summary-title">Last 7 Cycles</div></div>
           <table class="data-table">
             <thead>
               <tr>
@@ -1131,7 +1131,9 @@ document.getElementById('add-sex-btn').addEventListener('click', async () => {
 // ═══════════════════════════════════════════════════════
 document.getElementById('cycles-slider').addEventListener('input', function() {
   document.getElementById('cycles-val').textContent = this.value;
+  renderCycleChart();
   renderCompareChart();
+  renderSummary();
 });
 
 // ═══════════════════════════════════════════════════════
@@ -1244,7 +1246,8 @@ function renderCycleChart() {
 
   const cycles  = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
   const currNum = cycles[cycles.length - 1];
-  const histNums = cycles.slice(0,-1).slice(-6);
+  const n        = parseInt(document.getElementById('cycles-slider').value);
+  const histNums = cycles.slice(0,-1).slice(-(Math.max(n - 1, 1)));
 
   const currData = allData
     .filter(d => d.cycle_number === currNum && LEVELS[d.test_level])
@@ -1263,7 +1266,7 @@ function renderCycleChart() {
 
   if (showPred && histNums.length >= 2) {
     const lastDay  = Math.max(...currData.map(d => d.cycle_day));
-    const avgLen   = avgCycleLen(cycles);
+    const avgLen   = avgCycleLen(histNums);
     const until    = Math.min(avgLen, 35);
     const actualPeak = currData.find(d => d.test_level === 'Peak');
     const peakDay    = actualPeak ? actualPeak.cycle_day : avgPeakDay(histNums);
@@ -1440,8 +1443,8 @@ function avgPeakDay(histNums) {
   return days.length >= 2 ? Math.round(days.reduce((s, d) => s + d, 0) / days.length) : null;
 }
 
-function avgCycleLen(cycles) {
-  const lens = cycles.slice(0,-1).map(cn => {
+function avgCycleLen(cycleNums) {
+  const lens = cycleNums.map(cn => {
     const days = allData.filter(d => d.cycle_number === cn).map(d => d.cycle_day);
     return days.length ? Math.max(...days) : null;
   }).filter(Boolean);
@@ -1707,24 +1710,29 @@ function renderSummary() {
   if (!allData.length) return;
 
   const cycles = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
-  const last6  = cycles.slice(-6);
+  const n      = parseInt(document.getElementById('cycles-slider').value);
+  const shown  = cycles.slice(-n);
   const curr   = cycles[cycles.length - 1];
   const currDay = Math.max(...allData.filter(d=>d.cycle_number===curr).map(d=>d.cycle_day));
 
-  const rows = last6.map(cn => {
+  const titleEl = document.getElementById('summary-title');
+  if (titleEl) titleEl.textContent = `Last ${n} Cycle${n === 1 ? '' : 's'}`;
+
+  const rows = shown.map(cn => {
     const cd     = allData.filter(d=>d.cycle_number===cn).sort((a,b)=>a.date-b.date);
     const start  = cd.find(d=>d.cycle_start);
     const sDate  = start?.date || cd[0]?.date;
     const eDate  = cd[cd.length-1]?.date;
-    const len    = (sDate && eDate) ? Math.round((eDate-sDate)/86400000)+1 : null;
+    const cycleDays = cd.map(d=>d.cycle_day).filter(Boolean);
+    const len    = cycleDays.length ? Math.max(...cycleDays) : null;
     const peak   = cd.find(d=>d.test_level==='Peak');
     return { cn, sDate, eDate, len, peakDay: peak?.cycle_day };
   });
 
-  // Stat cards
-  const completeLens = rows.filter(r=>r.len).map(r=>r.len);
+  // Stat cards — exclude current (incomplete) cycle so averages match the prediction trace
+  const completeLens = rows.filter(r=>r.len && r.cn !== curr).map(r=>r.len);
   const avgLen = completeLens.length ? Math.round(completeLens.reduce((s,l)=>s+l,0)/completeLens.length) : null;
-  const peakDays = rows.filter(r=>r.peakDay).map(r=>r.peakDay);
+  const peakDays = rows.filter(r=>r.peakDay && r.cn !== curr).map(r=>r.peakDay);
   const avgPeak  = peakDays.length ? Math.round(peakDays.reduce((s,d)=>s+d,0)/peakDays.length) : null;
 
   document.getElementById('stat-grid').innerHTML = [
