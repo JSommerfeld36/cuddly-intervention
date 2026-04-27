@@ -31,3 +31,4 @@ logs/
 # Service account / key files
 service-account-*.json
 *.service-account.json
+.env*.local
