@@ -439,7 +439,6 @@
       color: var(--c-sex);
       z-index: 1;
       line-height: 1;
-      /* text-shadow: 0 1px 2px rgba(255,255,255,0.55); */
     }
 
     /* ── Table ── */
@@ -649,6 +648,19 @@
 
       <div class="divider"></div>
 
+      <!-- Cycles Slider -->
+      <div>
+        <div class="sec-label">Cycles to Display</div>
+        <div class="slider-row">
+          <span style="font-size:12px;color:var(--muted)">Comparison view</span>
+          <span class="slider-val" id="cycles-val">7</span>
+        </div>
+        <input type="range" id="cycles-slider" min="1" max="12" value="7">
+        <div class="slider-ticks"><span>1</span><span>6</span><span>12</span></div>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- Entry Form -->
       <div>
         <div class="sec-label">Add New Entry</div>
@@ -692,18 +704,6 @@
         </button>
       </div>
 
-      <div class="divider"></div>
-
-      <!-- Cycles Slider -->
-      <div>
-        <div class="sec-label">Cycles to Display</div>
-        <div class="slider-row">
-          <span style="font-size:12px;color:var(--muted)">Comparison view</span>
-          <span class="slider-val" id="cycles-val">7</span>
-        </div>
-        <input type="range" id="cycles-slider" min="1" max="12" value="7">
-        <div class="slider-ticks"><span>1</span><span>6</span><span>12</span></div>
-      </div>
 
     </div>
   </aside>
@@ -1170,6 +1170,39 @@ function segColor(pts) {
   };
 }
 
+let _sexIconChar = null;
+function getSexIconChar() {
+  if (_sexIconChar) return _sexIconChar;
+  const el = document.createElement('i');
+  el.className = 'bi bi-emoji-heart-eyes';
+  Object.assign(el.style, { position: 'fixed', top: '-9999px', visibility: 'hidden' });
+  document.body.appendChild(el);
+  _sexIconChar = window.getComputedStyle(el, '::before').content.replace(/^["']|["']$/g, '');
+  document.body.removeChild(el);
+  return _sexIconChar;
+}
+
+const sexMarkerPlugin = {
+  id: 'sexMarkers',
+  afterDatasetsDraw(chart) {
+    const days = chart.options.plugins?.sexMarkers?.days;
+    if (!days || !days.length) return;
+    const { ctx, scales } = chart;
+    const OFFSET = 30; // px above the data point centre — tweak this value
+    ctx.save();
+    ctx.font = '15px "bootstrap-icons"';
+    ctx.fillStyle = '#DD9EFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    days.forEach(({ day, y: dataY }) => {
+      const px = scales.x.getPixelForValue(day);
+      const py = scales.y.getPixelForValue(dataY) - OFFSET;
+      ctx.fillText(getSexIconChar(), px, py);
+    });
+    ctx.restore();
+  }
+};
+
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
@@ -1229,25 +1262,45 @@ function renderCycleChart() {
   let predicted  = [];
 
   if (showPred && histNums.length >= 2) {
-    const lastDay = Math.max(...currData.map(d => d.cycle_day));
-    const avgLen  = avgCycleLen(cycles);
-    const until   = Math.min(avgLen, 35);
+    const lastDay  = Math.max(...currData.map(d => d.cycle_day));
+    const avgLen   = avgCycleLen(cycles);
+    const until    = Math.min(avgLen, 35);
+    const actualPeak = currData.find(d => d.test_level === 'Peak');
+    const peakDay    = actualPeak ? actualPeak.cycle_day : avgPeakDay(histNums);
+    const base     = currData[currData.length - 1].date;
 
     for (let day = lastDay + 1; day <= until; day++) {
-      const lvl = predictLvl(day, histNums);
-      if (lvl === null) break;
-      const base = currData[currData.length - 1].date;
-      const pd   = new Date(base);
+      const offset = peakDay !== null ? day - peakDay : null;
+      let lvl;
+
+      if (offset !== null && offset >= 0 && offset < PEAK_TEMPLATE.length) {
+        lvl = PEAK_TEMPLATE[offset];
+      } else if (offset !== null && offset >= PEAK_TEMPLATE.length) {
+        lvl = 'Very Low';
+      } else {
+        lvl = predictLvl(day, histNums);
+        if (lvl === null) continue;
+      }
+
+      const pd = new Date(base);
       pd.setDate(pd.getDate() + (day - lastDay));
       predicted.push({ x: day, y: lvlVal(lvl), label: lvl, date: pd, cycle_day: day, pred: true });
     }
   }
+
+  const currDayY = {};
+  currData.forEach(d => { currDayY[d.cycle_day] = lvlVal(d.test_level); });
+
+  const sexDays = allData
+    .filter(d => d.cycle_number === currNum && d.intercourse && d.cycle_day && currDayY[d.cycle_day] != null)
+    .map(d => ({ day: d.cycle_day, y: currDayY[d.cycle_day] }));
 
   const ctx = document.getElementById('chart-cycle').getContext('2d');
   if (chartCycle) chartCycle.destroy();
 
   chartCycle = new Chart(ctx, {
     type: 'line',
+    plugins: [sexMarkerPlugin],
     data: {
       datasets: [
         {
@@ -1301,6 +1354,7 @@ function renderCycleChart() {
           }
         },
         annotation: { annotations: buildTodayLine(currData) },
+        sexMarkers: { days: sexDays },
       },
       scales: {
         x: {
@@ -1333,6 +1387,13 @@ function renderCycleChart() {
     </div>`;
   }
 
+  if (sexDays.length) {
+    leg.innerHTML += `<div class="leg-item" style="margin-left:8px;padding-left:8px;border-left:1px solid var(--border)">
+      <i class="bi bi-emoji-heart-eyes" style="color:#DD9EFF;font-size:14px;line-height:1"></i>
+      Intercourse
+    </div>`;
+  }
+
   document.getElementById('show-pred').onchange = renderCycleChart;
 }
 
@@ -1357,6 +1418,8 @@ function buildTodayLine(currData) {
 // ═══════════════════════════════════════════════════════
 //  Prediction helpers
 // ═══════════════════════════════════════════════════════
+const PEAK_TEMPLATE = ['Peak', 'Peak', 'High', 'Low', 'Low', 'Very Low'];
+
 function predictLvl(day, histNums) {
   const hist = allData.filter(d => histNums.includes(d.cycle_number) && d.cycle_day === day && LEVELS[d.test_level]);
   if (hist.length < 2) return null;
@@ -1367,6 +1430,14 @@ function predictLvl(day, histNums) {
   if (modes.length === 1) return modes[0];
   const avg = hist.reduce((s,d) => s + lvlVal(d.test_level), 0) / hist.length;
   return LEVEL_KEYS[Math.round(avg)] || 'Low';
+}
+
+function avgPeakDay(histNums) {
+  const days = histNums.map(cn => {
+    const entry = allData.find(d => d.cycle_number === cn && d.test_level === 'Peak');
+    return entry ? entry.cycle_day : null;
+  }).filter(d => d !== null);
+  return days.length >= 2 ? Math.round(days.reduce((s, d) => s + d, 0) / days.length) : null;
 }
 
 function avgCycleLen(cycles) {
@@ -1406,6 +1477,7 @@ function renderCompareChart() {
       borderWidth: 1.5,
       pointRadius: 0,
       tension: 0.3,
+      order: 1,
       _hist: true,
       _cn: cn,
     });
@@ -1429,6 +1501,7 @@ function renderCompareChart() {
     pointRadius: 7,
     pointHoverRadius: 10,
     tension: 0.3,
+    order: 0,
   });
 
   const ctx = document.getElementById('chart-compare').getContext('2d');
