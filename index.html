@@ -812,58 +812,44 @@ function initAuth() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
+      credentials: 'same-origin',
     })
-      .then(res => res.json())
-      .then(data => {
-        // Remove the single-use code from the URL so it won't be reused on reload
+      .then(res => {
         try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
-
-        // Server returns an access token when available; persist it for immediate use.
-        if (data.token) localStorage.setItem('token', data.token);
-
-        // Show the app and load data (server may also rely on the session cookie).
+        if (!res.ok) throw new Error('Auth failed');
+        return res.json();
+      })
+      .then(() => {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('app').classList.add('visible');
         loadData();
       })
       .catch(err => {
         console.error(err);
-        // Remove code param to avoid retrying with the same one-time code
-        try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
-
-        // If we already have a stored token or a session cookie, proceed; otherwise surface error.
-        const stored = localStorage.getItem('token');
-        const hasSession = document.cookie && document.cookie.includes('session=');
-        if (stored || hasSession) {
-          document.getElementById('login-screen').style.display = 'none';
-          document.getElementById('app').classList.add('visible');
-          loadData();
-        } else {
-          toast('Authentication failed', 'err');
-        }
+        toast('Authentication failed', 'err');
       });
+  } else {
+    // No code in URL — try to load data using the existing session cookie.
+    // If unauthorized, the login screen stays visible.
+    tryResumeSession();
   }
+}
 
-  // If there's no one-time code but we already have a stored token or session
-  // cookie, automatically show the app and load data on page refresh.
-  const storedToken = localStorage.getItem('token');
-  const hasSessionCookie = document.cookie && document.cookie.includes('session=');
-  if (!code && (storedToken || hasSessionCookie)) {
+async function tryResumeSession() {
+  try {
+    const res = await fetch('/api/sheets', { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const json = await res.json();
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').classList.add('visible');
-    loadData();
-  }
+    allData = parseRows(json.values || []);
+    refreshAll();
+  } catch (e) { /* not signed in */ }
 }
 
 async function loadData() {
   try {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('No token found');
-
-    const res = await fetch('/api/sheets', {
-      headers: { token },
-    });
-
+    const res = await fetch('/api/sheets', { credentials: 'same-origin' });
     if (!res.ok) throw new Error('Failed to fetch data');
     const json = await res.json();
 
@@ -907,19 +893,14 @@ function toSheetDate(d) {
 }
 
 async function appendRow(vals) {
-  // Use server-side append endpoint which uses the stored refresh token.
   const res = await fetch('/api/append', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values: vals }),
+    credentials: 'same-origin',
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    // If server indicates insufficient scopes, redirect user to re-consent
-    if (body && body.error === 'insufficient_scopes' && body.authUrl) {
-      window.location.href = body.authUrl;
-      return;
-    }
     throw new Error(body.error || 'Append failed');
   }
 }

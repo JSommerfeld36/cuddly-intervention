@@ -1,26 +1,36 @@
 const { google } = require('googleapis');
 const path = require('path');
-const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const SHEET_ID = process.env.SHEET_ID;
-const TOKENS_FILE = path.resolve(process.cwd(), 'data', 'tokens.json');
-
-function readTokens() {
-  try {
-    return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8') || '[]');
-  } catch (e) {
-    return [];
-  }
-}
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const ALLOWED_EMAILS = ['joel.sommerfeld36@gmail.com', 'amandamariegordon17@gmail.com'];
 
 function parseCookies(cookieHeader) {
   if (!cookieHeader) return {};
   return cookieHeader.split(';').map(c => c.trim()).reduce((acc, pair) => {
     const [k, ...v] = pair.split('=');
-    acc[k] = decodeURIComponent(v.join('='));
+    acc[k] = v.join('=');
     return acc;
   }, {});
+}
+
+function verifySession(sessionValue) {
+  if (!sessionValue || !SESSION_SECRET) return null;
+  const parts = sessionValue.split('.');
+  if (parts.length !== 3) return null;
+  const [emailEnc, expiresAtStr, sig] = parts;
+  const payload = `${emailEnc}.${expiresAtStr}`;
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  const sigBuf = Buffer.from(sig, 'hex');
+  const expBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+  const expiresAt = parseInt(expiresAtStr, 10);
+  if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
+  const email = decodeURIComponent(emailEnc);
+  if (!ALLOWED_EMAILS.includes(email)) return null;
+  return { email };
 }
 
 function getServiceAccountAuth() {
@@ -35,12 +45,8 @@ function getServiceAccountAuth() {
 
 async function handler(req, res) {
   const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies.session;
-  if (!sessionId) return res.status(401).json({ error: 'Unauthorized' });
-
-  const list = readTokens();
-  const entry = list.find((r) => r.sessionId === sessionId);
-  if (!entry) return res.status(401).json({ error: 'Unauthorized' });
+  const session = verifySession(cookies.session);
+  if (!session) return res.status(401).json({ error: 'Unauthorized' });
 
   if (!SHEET_ID) {
     console.error('Missing SHEET_ID in environment');
