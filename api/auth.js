@@ -20,7 +20,8 @@ const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 
 function signSession(email) {
   const expiresAt = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
-  const payload = `${encodeURIComponent(email)}.${expiresAt}`;
+  const emailB64 = Buffer.from(email, 'utf8').toString('base64url');
+  const payload = `${emailB64}.${expiresAt}`;
   const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }

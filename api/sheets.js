@@ -20,15 +20,15 @@ function verifySession(sessionValue) {
   if (!sessionValue || !SESSION_SECRET) return null;
   const parts = sessionValue.split('.');
   if (parts.length !== 3) return null;
-  const [emailEnc, expiresAtStr, sig] = parts;
-  const payload = `${emailEnc}.${expiresAtStr}`;
+  const [emailB64, expiresAtStr, sig] = parts;
+  const payload = `${emailB64}.${expiresAtStr}`;
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
   const sigBuf = Buffer.from(sig, 'hex');
   const expBuf = Buffer.from(expected, 'hex');
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
   const expiresAt = parseInt(expiresAtStr, 10);
   if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
-  const email = decodeURIComponent(emailEnc);
+  const email = Buffer.from(emailB64, 'base64url').toString('utf8');
   if (!ALLOWED_EMAILS.includes(email)) return null;
   return { email };
 }
