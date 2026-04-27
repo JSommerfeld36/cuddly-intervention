@@ -65,7 +65,7 @@ async function handler(req, res) {
   } catch (error) {
     console.error('Sheets API error:', error);
     if (error.response && error.response.data) console.error('Response data:', error.response.data);
-    res.status(500).json({ error: 'Failed to fetch data', details: error.message });
+    res.status(500).json({ error: 'Failed to fetch data' });
   }
 }
 

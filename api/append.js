@@ -78,6 +78,6 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     const gErr = e && e.response && e.response.data ? e.response.data : null;
     console.error('Append error:', gErr || e.message);
-    return res.status(500).json({ error: 'Failed to append row', details: gErr || e.message });
+    return res.status(500).json({ error: 'Failed to append row' });
   }
 };

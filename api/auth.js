@@ -18,6 +18,23 @@ if (!SESSION_SECRET) console.error('Missing SESSION_SECRET');
 
 const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 
+const CANONICAL_ORIGIN = baseUrl.replace(/\/$/, '');
+const EXTRA_ALLOWED_ORIGINS = (process.env.ALLOWED_RETURN_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+const ALLOWED_RETURN_ORIGINS = new Set([CANONICAL_ORIGIN, ...EXTRA_ALLOWED_ORIGINS]);
+
+function safeReturnOrigin(value) {
+  if (!value) return null;
+  try {
+    const u = new URL(value);
+    return ALLOWED_RETURN_ORIGINS.has(u.origin) ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 function signSession(email) {
   const expiresAt = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
   const emailB64 = Buffer.from(email, 'utf8').toString('base64url');
@@ -31,13 +48,14 @@ async function handler(req, res) {
     const { code, state, returnTo } = req.query || {};
 
     if (code) {
-      const forwardTo = state ? decodeURIComponent(state) : (returnTo || '/');
-      const forwardUrl = `${forwardTo.replace(/\/$/, '')}/?code=${encodeURIComponent(code)}`;
+      const candidate = state ? decodeURIComponent(state) : returnTo;
+      const safeOrigin = safeReturnOrigin(candidate) || CANONICAL_ORIGIN;
+      const forwardUrl = `${safeOrigin}/?code=${encodeURIComponent(code)}`;
       return res.redirect(forwardUrl);
     }
 
-    const clientReturnTo = returnTo || '';
-    const stateValue = clientReturnTo ? encodeURIComponent(clientReturnTo) : undefined;
+    const validatedReturn = safeReturnOrigin(returnTo);
+    const stateValue = validatedReturn ? encodeURIComponent(validatedReturn) : undefined;
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'online',
@@ -73,7 +91,7 @@ async function handler(req, res) {
     } catch (error) {
       console.error('Auth error:', error);
       if (error.response && error.response.data) console.error('Response data:', error.response.data);
-      return res.status(500).json({ error: 'Authentication failed', details: error.message });
+      return res.status(500).json({ error: 'Authentication failed' });
     }
   }
 
