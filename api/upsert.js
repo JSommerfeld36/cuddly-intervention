@@ -4,8 +4,10 @@ const crypto = require('crypto');
 require('dotenv').config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const SHEET_ID = process.env.SHEET_ID;
+const SHEET_NAME = process.env.SHEET_NAME || 'Sheet1';
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const ALLOWED_EMAILS = ['joel.sommerfeld36@gmail.com', 'amandamariegordon17@gmail.com'];
+const COL_COUNT = 6;
 
 function parseCookies(cookieHeader) {
   if (!cookieHeader) return {};
@@ -43,6 +45,16 @@ function getServiceAccountAuth() {
   });
 }
 
+function dateOnly(s) {
+  return (s || '').split(' ')[0];
+}
+
+function boolStr(v) {
+  if (v === true) return 'TRUE';
+  if (v === false) return 'FALSE';
+  return '';
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -58,26 +70,71 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Server configuration error: SHEET_ID missing' });
   }
 
-  const { values } = req.body || {};
-  if (!values || !Array.isArray(values)) return res.status(400).json({ error: 'Missing values array in request body' });
+  const body = req.body || {};
+  const { date, cycle_number, cycle_start, test_level, cycle_day, intercourse } = body;
+  if (!date) return res.status(400).json({ error: 'Missing date' });
 
   try {
     const auth = getServiceAccountAuth();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    const range = `${process.env.SHEET_NAME || 'Sheet1'}!A:E`;
-    const resp = await sheets.spreadsheets.values.append({
+    const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range,
+      range: `${SHEET_NAME}!A:F`,
+    });
+    const rows = data.values || [];
+
+    const target = dateOnly(date);
+    let foundIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (dateOnly(rows[i][0]) === target) {
+        foundIndex = i;
+        break;
+      }
+    }
+
+    if (foundIndex === -1) {
+      const newRow = [
+        date,
+        cycle_number ?? '',
+        boolStr(cycle_start),
+        test_level ?? '',
+        cycle_day ?? '',
+        boolStr(intercourse),
+      ];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!A:F`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: [newRow] },
+      });
+      return res.status(200).json({ success: true, action: 'inserted' });
+    }
+
+    const existing = rows[foundIndex] || [];
+    const merged = [];
+    for (let i = 0; i < COL_COUNT; i++) merged[i] = existing[i] ?? '';
+
+    merged[0] = date;
+    if (cycle_number !== undefined) merged[1] = cycle_number;
+    if (cycle_start !== undefined) merged[2] = boolStr(cycle_start);
+    if (test_level !== undefined) merged[3] = test_level;
+    if (cycle_day !== undefined) merged[4] = cycle_day;
+    if (intercourse !== undefined) merged[5] = boolStr(intercourse);
+
+    const sheetRow = foundIndex + 1;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!A${sheetRow}:F${sheetRow}`,
       valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: [values] },
+      requestBody: { values: [merged] },
     });
 
-    return res.status(200).json({ success: true, result: resp.data });
+    return res.status(200).json({ success: true, action: 'updated' });
   } catch (e) {
     const gErr = e && e.response && e.response.data ? e.response.data : null;
-    console.error('Append error:', gErr || e.message);
-    return res.status(500).json({ error: 'Failed to append row' });
+    console.error('Upsert error:', gErr || e.message);
+    return res.status(500).json({ error: 'Failed to save row' });
   }
 };

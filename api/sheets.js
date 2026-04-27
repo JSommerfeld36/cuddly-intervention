@@ -58,7 +58,7 @@ async function handler(req, res) {
     const sheets = google.sheets({ version: 'v4', auth });
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${process.env.SHEET_NAME || 'Sheet1'}!A:E`,
+      range: `${process.env.SHEET_NAME || 'Sheet1'}!A:F`,
     });
 
     res.status(200).json(data);

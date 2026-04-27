@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -17,6 +18,7 @@
       --surface:       #FFFFFF;
       --border:        #E8E0D8;
       --text:          #4B413A;
+      --text-on-today: #E9E9E9;
       --muted:         #9C8F87;
       --sidebar-bg:    #F2EDE7;
       --sidebar-w:     300px;
@@ -28,13 +30,14 @@
       --c-low:         #7FAF8A;
       --c-high:        #D98B6A;
       --c-peak:        #C25C6E;
+      --c-sex:         #FFFA75;
 
       --safe-bg:       #C7EDD0;
       --safe-fg:       #1A7A3C;
       --caution-bg:    #FFC4BD;
       --caution-fg:    #C01A00;
 
-      --text-on-today: #E9E9E9;
+      
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -429,6 +432,15 @@
       line-height: 1;
       z-index: 1;
     }
+    .cell-sex {
+      position: absolute;
+      top: unset; right: unset;
+      font-size: 35px;
+      color: var(--c-sex);
+      z-index: 1;
+      line-height: 1;
+      /* text-shadow: 0 1px 2px rgba(255,255,255,0.55); */
+    }
 
     /* ── Table ── */
     .data-table { width: 100%; border-collapse: collapse; }
@@ -590,6 +602,7 @@
       .cell-num { font-size: 11px; top: 3px; left: 4px; }
       .cal-cell.cal-today .cell-num { font-size: 13px; }
       .cell-cd { display: none; }
+      .cell-sex { font-size: 13px; top: 3px; right: 4px; }
     }
   </style>
 </head>
@@ -663,6 +676,20 @@
           </select>
         </div>
         <button class="btn-primary" id="add-btn">Add Entry</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Log Intercourse -->
+      <div>
+        <div class="sec-label">Log Intercourse</div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" id="f-sex-date" class="form-input">
+        </div>
+        <button class="btn-primary" id="add-sex-btn">
+          <i class="bi bi-emoji-heart-eyes"></i> Log it
+        </button>
       </div>
 
       <div class="divider"></div>
@@ -750,6 +777,7 @@
                 <th>Day</th>
                 <th>Level</th>
                 <th>Start?</th>
+                <th>Sex</th>
               </tr>
             </thead>
             <tbody id="entries-body"></tbody>
@@ -905,7 +933,8 @@ function parseRows(rows) {
     cycle_start:  (r[2] || '').toUpperCase() === 'TRUE',
     test_level:   r[3] || '',
     cycle_day:    parseInt(r[4]) || 0,
-  })).filter(r => r.date && r.cycle_number && LEVELS[r.test_level]);
+    intercourse:  (r[5] || '').toUpperCase() === 'TRUE',
+  })).filter(r => r.date && r.cycle_number && (LEVELS[r.test_level] || r.intercourse));
 }
 
 function parseDate(s) {
@@ -928,17 +957,25 @@ function toSheetDate(d) {
   return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')} 00:00:00`;
 }
 
-async function appendRow(vals) {
-  const res = await fetch('/api/append', {
+async function upsertRow(payload) {
+  const res = await fetch('/api/upsert', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values: vals }),
+    body: JSON.stringify(payload),
     credentials: 'same-origin',
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Append failed');
+    throw new Error(body.error || 'Save failed');
   }
+}
+
+async function reloadData() {
+  const res = await fetch('/api/sheets', { credentials: 'same-origin' });
+  if (!res.ok) throw new Error('Failed to fetch data');
+  const json = await res.json();
+  allData = parseRows(json.values || []);
+  refreshAll();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1004,6 +1041,7 @@ function updateStatus() {
 function fillFormDefaults() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('f-date').value = today;
+  document.getElementById('f-sex-date').value = today;
   if (allData.length) {
     const max = Math.max(...allData.map(d => d.cycle_number));
     document.getElementById('f-cycle-num').value = max;
@@ -1039,19 +1077,52 @@ document.getElementById('add-btn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    await appendRow([toSheetDate(date), cycleNum, isStart ? 'TRUE' : 'FALSE', level, cycleDay]);
+    await upsertRow({
+      date: toSheetDate(date),
+      cycle_number: cycleNum,
+      cycle_start: isStart,
+      test_level: level,
+      cycle_day: cycleDay,
+    });
 
-    allData.push({ date, cycle_number: cycleNum, cycle_start: isStart, test_level: level, cycle_day: cycleDay });
-    toast('Entry added!', 'ok');
-
+    toast('Entry saved!', 'ok');
     document.getElementById('f-cycle-start').checked = false;
     document.getElementById('f-level').value = '';
-    refreshAll();
+    await reloadData();
   } catch(e) {
     toast('Save failed — see console', 'err');
     console.error(e);
   } finally {
     btn.disabled = false; btn.textContent = 'Add Entry';
+  }
+});
+
+document.getElementById('add-sex-btn').addEventListener('click', async () => {
+  const dateStr = document.getElementById('f-sex-date').value;
+  if (!dateStr) { toast('Please pick a date', 'err'); return; }
+
+  const date     = new Date(dateStr + 'T00:00:00');
+  const cycleNum = allData.length ? Math.max(...allData.map(d => d.cycle_number)) : 1;
+  const cycleDay = Math.max(1, calcCycleDay(date, cycleNum));
+
+  const btn = document.getElementById('add-sex-btn');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    await upsertRow({
+      date: toSheetDate(date),
+      cycle_number: cycleNum,
+      cycle_day: cycleDay,
+      intercourse: true,
+    });
+    toast('Logged!', 'ok');
+    await reloadData();
+  } catch(e) {
+    toast('Save failed — see console', 'err');
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.innerHTML = originalHtml;
   }
 });
 
@@ -1143,7 +1214,7 @@ function renderCycleChart() {
   const histNums = cycles.slice(0,-1).slice(-6);
 
   const currData = allData
-    .filter(d => d.cycle_number === currNum)
+    .filter(d => d.cycle_number === currNum && LEVELS[d.test_level])
     .sort((a,b) => a.cycle_day - b.cycle_day);
 
   if (!currData.length) return;
@@ -1287,7 +1358,7 @@ function buildTodayLine(currData) {
 //  Prediction helpers
 // ═══════════════════════════════════════════════════════
 function predictLvl(day, histNums) {
-  const hist = allData.filter(d => histNums.includes(d.cycle_number) && d.cycle_day === day);
+  const hist = allData.filter(d => histNums.includes(d.cycle_number) && d.cycle_day === day && LEVELS[d.test_level]);
   if (hist.length < 2) return null;
   const freq = {};
   hist.forEach(d => { freq[d.test_level] = (freq[d.test_level] || 0) + 1; });
@@ -1321,7 +1392,7 @@ function renderCompareChart() {
   // Historical (grey)
   shown.filter(cn => cn !== curr).forEach(cn => {
     const pts = allData
-      .filter(d => d.cycle_number === cn)
+      .filter(d => d.cycle_number === cn && LEVELS[d.test_level])
       .sort((a,b) => a.cycle_day - b.cycle_day)
       .map(d => ({ x: d.cycle_day, y: lvlVal(d.test_level), label: d.test_level, date: d.date, cycle_day: d.cycle_day }));
 
@@ -1342,7 +1413,7 @@ function renderCompareChart() {
 
   // Current (coloured)
   const currPts = allData
-    .filter(d => d.cycle_number === curr)
+    .filter(d => d.cycle_number === curr && LEVELS[d.test_level])
     .sort((a,b) => a.cycle_day - b.cycle_day)
     .map(d => ({ x: d.cycle_day, y: lvlVal(d.test_level), label: d.test_level, date: d.date, cycle_day: d.cycle_day }));
 
@@ -1450,10 +1521,13 @@ function renderCalendar() {
     if (isFuture) cls += ' cal-future';
     if (!entry)   cls += ' cal-empty';
 
+    const hasLevel = entry && LEVELS[entry.test_level];
+
     html += `<div class="${cls}" data-k="${k}">
       <span class="cell-num">${day}</span>
-      ${entry ? `<div class="cell-dot" style="background:${lvlColor(entry.test_level)}"></div>` : ''}
-      ${entry ? `<span class="cell-cd">D${entry.cycle_day}</span>` : ''}
+      ${hasLevel ? `<div class="cell-dot" style="background:${lvlColor(entry.test_level)}"></div>` : ''}
+      ${entry && entry.cycle_day ? `<span class="cell-cd">D${entry.cycle_day}</span>` : ''}
+      ${entry && entry.intercourse ? `<i class="bi bi-emoji-heart-eyes cell-sex"></i>` : ''}
     </div>`;
   }
   html += `</div></div>`;
@@ -1478,7 +1552,20 @@ function showPopover(e, k, byDate) {
   const entry = byDate[k];
   if (!entry) return;
   const pop   = document.getElementById('popover');
-  const color = lvlColor(entry.test_level);
+  const hasLevel = LEVELS[entry.test_level];
+  const color = hasLevel ? lvlColor(entry.test_level) : 'transparent';
+
+  const levelRow = hasLevel ? `
+    <div style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block"></span>
+      ${entry.test_level}
+    </div>` : `
+    <div style="font-size:12px;color:var(--muted);font-style:italic">No test logged</div>`;
+
+  const sexRow = entry.intercourse ? `
+    <div style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;margin-top:6px;color:var(--c-peak)">
+      <i class="bi bi-emoji-heart-eyes"></i> Intercourse logged
+    </div>` : '';
 
   pop.innerHTML = `
     <div style="font-weight:700;color:var(--text);margin-bottom:4px">
@@ -1487,10 +1574,8 @@ function showPopover(e, k, byDate) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
       Day ${entry.cycle_day} · Cycle ${entry.cycle_number}
     </div>
-    <div style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px">
-      <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block"></span>
-      ${entry.test_level}
-    </div>`;
+    ${levelRow}
+    ${sexRow}`;
 
   const rect = e.target.getBoundingClientRect();
   pop.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
@@ -1513,16 +1598,24 @@ function renderEntries() {
   const slice  = sorted.slice((entriesPage-1)*PER_PAGE, entriesPage*PER_PAGE);
 
   document.getElementById('entries-body').innerHTML = slice.map(d => {
-    const c = lvlColor(d.test_level);
-    const b = LEVELS[d.test_level]?.bg || '#f0f0f0';
+    const hasLevel = LEVELS[d.test_level];
+    const c = hasLevel ? lvlColor(d.test_level) : '#9C8F87';
+    const b = hasLevel ? LEVELS[d.test_level].bg : '#f0f0f0';
+    const levelCell = hasLevel
+      ? `<span class="badge" style="background:${b};color:${c}">
+           <span class="badge-dot" style="background:${c}"></span>${d.test_level}
+         </span>`
+      : '<span style="color:var(--muted)">—</span>';
+    const sexCell = d.intercourse
+      ? `<i class="bi bi-emoji-heart-eyes" style="color:var(--c-peak);font-size:16px"></i>`
+      : '<span style="color:var(--muted)">—</span>';
     return `<tr>
       <td>${fmtDate(d.date)}</td>
       <td>${d.cycle_number}</td>
       <td>Day ${d.cycle_day}</td>
-      <td><span class="badge" style="background:${b};color:${c}">
-        <span class="badge-dot" style="background:${c}"></span>${d.test_level}
-      </span></td>
+      <td>${levelCell}</td>
       <td>${d.cycle_start ? '✓' : '—'}</td>
+      <td>${sexCell}</td>
     </tr>`;
   }).join('');
 
