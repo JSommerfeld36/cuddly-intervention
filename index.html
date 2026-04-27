@@ -25,11 +25,17 @@
       --radius:        12px;
       --radius-sm:     8px;
 
-      --c-period:      #9B4D70;
-      --c-very-low:    #90BAA0;
+      --c-very-low: #90cad6; 
+      --c-low:      #81b59a;  
+      --c-period:   #cb8bc0;  
+      --c-peak:     #d97c83;  
+      --c-high:     #e7ac89;  
+
+      /* --c-period:      #9B4D70;
+      --c-very-low:    #a3d1b5;
       --c-low:         #7FAF8A;
       --c-high:        #D98B6A;
-      --c-peak:        #C25C6E;
+      --c-peak:        #C25C6E; */
       --c-sex:         #FFFA75;
 
       --safe-bg:       #C7EDD0;
@@ -411,8 +417,16 @@
     }
     .cal-cell:hover:not(.cal-empty):not(.cal-future) { background: rgba(232,224,216,0.6); }
     .cal-cell.cal-today { background: rgba(232,224,216,0.4); }
-    .cal-cell.cal-future { opacity: 0.35; pointer-events: none; }
-    .cal-cell.cal-empty  { cursor: default; border-color: transparent; }
+    .cal-cell.cal-future {
+      opacity: 1;
+      pointer-events: none;
+      background: transparent;
+      border-style: solid;
+      border-color: var(--border);
+      color: var(--muted);
+    }
+    .cal-cell.cal-future .cell-num { color: var(--muted); }
+    .cal-cell.cal-empty  { cursor: default; border-color: var(--border); }
     .cell-num {
       font-size: 42px;
       color: var(--text);
@@ -442,7 +456,7 @@
     }
 
     /* ── Table ── */
-    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .data-table th {
       text-align: left;
       font-size: 10px;
@@ -470,6 +484,13 @@
       border-radius: 100px;
     }
     .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* Even out Entries columns: Date | Cycle | Day | Level | Sex */
+    .data-table th:nth-child(1), .data-table td:nth-child(1) { width: 20%; }
+    .data-table th:nth-child(2), .data-table td:nth-child(2) { width: 20%; }
+    .data-table th:nth-child(3), .data-table td:nth-child(3) { width: 20%; }
+    .data-table th:nth-child(4), .data-table td:nth-child(4) { width: 20%; }
+    .data-table th:nth-child(5), .data-table td:nth-child(5) { width: 20%; }
 
     /* ── Stat Cards ── */
     .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; margin-bottom: 20px; }
@@ -599,9 +620,9 @@
       .cal-wd { font-size: 9px; padding: 2px 0 4px; }
       .cal-cell { min-height: 0; border-radius: 5px; }
       .cell-num { font-size: 11px; top: 3px; left: 4px; }
-      .cal-cell.cal-today .cell-num { font-size: 13px; }
+      .cal-cell.cal-today .cell-num { font-size: 14px; }
       .cell-cd { display: none; }
-      .cell-sex { font-size: 13px; top: 3px; right: 4px; }
+      .cell-sex { font-size: 14px; top: 3px; right: 4px; }
     }
   </style>
 </head>
@@ -776,7 +797,7 @@
                 <th>Cycle</th>
                 <th>Day</th>
                 <th>Level</th>
-                <th>Start?</th>
+                <!-- <th>Start?</th> -->
                 <th>Sex</th>
               </tr>
             </thead>
@@ -1155,7 +1176,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ═══════════════════════════════════════════════════════
 //  Chart helpers
 // ═══════════════════════════════════════════════════════
-function lvlColor(label) { return LEVELS[label]?.color || '#C4B8B0'; }
+function lvlColor(label) {
+  if (!label) return '#C4B8B0';
+  const cssVar = '--c-' + String(label).toLowerCase().replace(/\s+/g, '-');
+  const val = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
+  if (val) return val;
+  return LEVELS[label]?.color || '#C4B8B0';
+}
 function lvlVal(label)   { return LEVELS[label]?.v ?? 0; }
 
 function blend(h1, h2, t) {
@@ -1690,7 +1717,7 @@ function renderEntries() {
       <td>${d.cycle_number}</td>
       <td>Day ${d.cycle_day}</td>
       <td>${levelCell}</td>
-      <td>${d.cycle_start ? '✓' : '—'}</td>
+      <!-- <td>${d.cycle_start ? '✓' : '—'}</td> -->
       <td>${sexCell}</td>
     </tr>`;
   }).join('');
