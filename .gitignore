@@ -26,6 +26,7 @@ logs/
 .DS_Store
 .vscode/
 .idea/
+.claude/
 
 # Service account / key files
 service-account-*.json
