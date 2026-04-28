@@ -9,8 +9,8 @@
       ]
     }
   ],
-  "rewrites": [
-    { "source": "/package-lock.json", "destination": "/__not_found" },
-    { "source": "/README.md", "destination": "/__not_found" }
+  "redirects": [
+    { "source": "/package-lock.json", "destination": "/", "permanent": false },
+    { "source": "/README.md", "destination": "/", "permanent": false }
   ]
 }
