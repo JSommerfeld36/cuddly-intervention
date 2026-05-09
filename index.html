@@ -179,7 +179,10 @@
     .status-box.safe    { background: var(--safe-bg);    color: var(--safe-fg); }
     .status-box.caution { background: var(--caution-bg); color: var(--caution-fg); }
     .status-box.neutral { background: var(--border);     color: var(--muted); }
-    .status-icon { font-size: 26px; flex-shrink: 0; }
+    .status-box.girl    { background: #F5C6E3;           color: #7A2E68; }
+    .status-box.boy     { background: #B8D8E8;           color: #1E5A7A; }
+    .status-box.dealer  { background: #E89C95;           color: #7A2A22; }
+    .status-icon { font-size: 26px; flex-shrink: 0; line-height: 1; }
     .status-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 1px; }
     .status-text p  { font-size: 13px; font-weight: 500; opacity: 0.85; }
 
@@ -669,9 +672,9 @@
 
       <!-- Status -->
       <div id="status-box" class="status-box neutral">
-        <div class="status-icon" id="status-icon">⏳</div>
+        <div class="status-icon" id="status-icon"><i class="bi bi-hourglass-split"></i></div>
         <div class="status-text">
-          <h3>Should we??</h3>
+          <h3 id="status-title">Should we??</h3>
           <p id="status-val">Loading…</p>
         </div>
       </div>
@@ -1017,43 +1020,49 @@ function refreshAll() {
 //  Status Box  ("Should we??")
 // ═══════════════════════════════════════════════════════
 function updateStatus() {
-  const box  = document.getElementById('status-box');
-  const icon = document.getElementById('status-icon');
-  const val  = document.getElementById('status-val');
+  const box   = document.getElementById('status-box');
+  const icon  = document.getElementById('status-icon');
+  const title = document.getElementById('status-title');
+  const val   = document.getElementById('status-val');
+
+  const setState = (cls, iconHtml, titleText, valText) => {
+    box.className  = `status-box ${cls}`;
+    icon.innerHTML = iconHtml;
+    title.textContent = titleText;
+    val.textContent   = valText;
+  };
 
   if (!allData.length) return;
 
-  const cycles = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
-  const last7  = cycles.slice(-7);
-  const last6  = cycles.slice(-6);
-  const curr   = cycles[cycles.length - 1];
+  const cycles   = uniq(allData.map(d => d.cycle_number)).sort((a,b)=>a-b);
+  const curr     = cycles[cycles.length - 1];
+  const histNums = cycles.slice(0, -1).slice(-7);
+  const currData = allData
+    .filter(d => d.cycle_number === curr)
+    .sort((a,b) => a.cycle_day - b.cycle_day);
 
-  const peakDays7 = allData
-    .filter(d => last7.includes(d.cycle_number) && d.test_level === 'Peak')
-    .map(d => d.cycle_day);
-  const peakDays6 = allData
-    .filter(d => last6.includes(d.cycle_number) && d.test_level === 'Peak')
-    .map(d => d.cycle_day);
-
-  if (!peakDays7.length && !peakDays6.length) {
-    box.className = 'status-box neutral';
-    icon.textContent = '❓';
-    val.textContent = 'no peak data yet';
+  if (!currData.length) {
+    setState('neutral', '<i class="bi bi-hourglass-split"></i>', 'Should we??', 'no cycle data yet');
     return;
   }
 
-  const minPeak = peakDays7.length ? Math.min(...peakDays7) - 6 : 999;
-  const maxPeak = peakDays6.length ? Math.max(...peakDays6) + 3 : 0;
+  const actualPeak = currData.find(d => d.test_level === 'Peak');
+  const peakDay    = actualPeak ? actualPeak.cycle_day : avgPeakDay(histNums);
 
-  const currDay = Math.max(...allData
-    .filter(d => d.cycle_number === curr)
-    .map(d => d.cycle_day));
+  if (peakDay == null) {
+    setState('neutral', '<i class="bi bi-hourglass-split"></i>', 'Should we??', 'no peak data yet');
+    return;
+  }
 
-  const safe = currDay < minPeak || currDay > maxPeak;
+  const currDay = Math.max(...currData.map(d => d.cycle_day));
 
-  box.className  = `status-box ${safe ? 'safe' : 'caution'}`;
-  icon.textContent = safe ? '✅' : '⚠️';
-  val.textContent  = safe ? 'go for it!' : 'team no kids';
+  if (currDay >= peakDay - 5 && currDay <= peakDay - 3) {
+    setState('girl', '<i class="bi bi-gender-female"></i>', 'This is not a drill', "it's girl time");
+  } else if (currDay >= peakDay - 2 && currDay <= peakDay + 1) {
+    setState('boy', '<i class="bi bi-gender-male"></i>', 'Boy oh boy…', 'embrace the chaos');
+  } else {
+    setState('dealer', '<i class="bi bi-dice-5-fill"></i>', "Dealer's choice", "i'm feeling lucky punk");
+  }
 }
 
 // ═══════════════════════════════════════════════════════
