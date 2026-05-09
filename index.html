@@ -1383,7 +1383,7 @@ function renderCycleChart() {
             }),
           }
         },
-        annotation: { annotations: buildTodayLine(currData) },
+        annotation: { annotations: { ...buildShettlesBoxes(currData, histNums), ...buildTodayLine(currData) } },
         sexMarkers: { days: sexDays },
       },
       scales: {
@@ -1424,7 +1424,43 @@ function renderCycleChart() {
     </div>`;
   }
 
+  const actualPeak = currData.find(d => d.test_level === 'Peak');
+  const shettlesPeak = actualPeak ? actualPeak.cycle_day : avgPeakDay(histNums);
+  if (shettlesPeak != null) {
+    leg.innerHTML += `<div class="leg-item" style="margin-left:8px;padding-left:8px;border-left:1px solid var(--border)">
+      <div class="leg-dot" style="background:rgba(203,139,192,0.45);border-radius:3px"></div>
+      Girl window
+    </div>
+    <div class="leg-item">
+      <div class="leg-dot" style="background:rgba(144,202,214,0.55);border-radius:3px"></div>
+      Boy window
+    </div>`;
+  }
+
   document.getElementById('show-pred').onchange = renderCycleChart;
+}
+
+function buildShettlesBoxes(currData, histNums) {
+  const actualPeak = currData.find(d => d.test_level === 'Peak');
+  const peakDay    = actualPeak ? actualPeak.cycle_day : avgPeakDay(histNums);
+  if (peakDay == null) return {};
+
+  return {
+    shettlesGirl: {
+      type: 'box',
+      xMin: peakDay - 5, xMax: peakDay - 2,
+      backgroundColor: 'rgba(203, 139, 192, 0.22)',
+      borderWidth: 0,
+      drawTime: 'beforeDatasetsDraw',
+    },
+    shettlesBoy: {
+      type: 'box',
+      xMin: peakDay - 2, xMax: peakDay + 1,
+      backgroundColor: 'rgba(144, 202, 214, 0.28)',
+      borderWidth: 0,
+      drawTime: 'beforeDatasetsDraw',
+    },
+  };
 }
 
 function buildTodayLine(currData) {
