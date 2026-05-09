@@ -182,6 +182,7 @@
     .status-box.girl    { background: #F5C6E3;           color: #7A2E68; }
     .status-box.boy     { background: #B8D8E8;           color: #1E5A7A; }
     .status-box.dealer  { background: #E89C95;           color: #7A2A22; }
+    .status-box.post    { background: #BEC8D4;           color: #364554; }
     .status-icon { font-size: 26px; flex-shrink: 0; line-height: 1; }
     .status-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 1px; }
     .status-text p  { font-size: 13px; font-weight: 500; opacity: 0.85; }
@@ -1054,12 +1055,16 @@ function updateStatus() {
     return;
   }
 
-  const currDay = Math.max(...currData.map(d => d.cycle_day));
+  const currDay   = Math.max(...currData.map(d => d.cycle_day));
+  const currEntry = currData.find(d => d.cycle_day === currDay);
+  const currLevel = currEntry ? currEntry.test_level : null;
 
   if (currDay >= peakDay - 5 && currDay <= peakDay - 3) {
     setState('girl', '<i class="bi bi-gender-female"></i>', 'This is not a drill', "it's girl time");
   } else if (currDay >= peakDay - 2 && currDay <= peakDay + 1) {
     setState('boy', '<i class="bi bi-gender-male"></i>', 'Boy oh boy…', 'embrace the chaos');
+  } else if (currDay > peakDay + 1 && currLevel === 'Very Low') {
+    setState('post', '<i class="bi bi-calendar-x-fill"></i>', 'The ship has sailed', "there's always the next one");
   } else {
     setState('dealer', '<i class="bi bi-dice-5-fill"></i>', "Dealer's choice", "i'm feeling lucky punk");
   }
