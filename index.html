@@ -1397,7 +1397,7 @@ function renderCycleChart() {
             }),
           }
         },
-        annotation: { annotations: { ...buildShettlesBoxes(currData, histNums), ...buildTodayLine(currData) } },
+        annotation: { annotations: { ...buildShettlesBoxes(currData, histNums), ...buildTodayLine(currData, currNum) } },
         sexMarkers: { days: sexDays },
       },
       scales: {
@@ -1477,17 +1477,26 @@ function buildShettlesBoxes(currData, histNums) {
   };
 }
 
-function buildTodayLine(currData) {
+function buildTodayLine(currData, currNum) {
   const today = new Date(); today.setHours(0,0,0,0);
   const entry = currData.find(d => {
     const dt = new Date(d.date); dt.setHours(0,0,0,0);
     return dt.getTime() === today.getTime();
   });
-  if (!entry) return {};
+  let cycleDay;
+  if (entry) {
+    cycleDay = entry.cycle_day;
+  } else {
+    const start = allData
+      .filter(d => d.cycle_number === currNum && d.cycle_start)
+      .sort((a, b) => a.date - b.date)[0];
+    if (!start) return {};
+    cycleDay = Math.round((today - start.date) / 86400000) + 1;
+  }
   return {
     today: {
       type: 'line',
-      xMin: entry.cycle_day, xMax: entry.cycle_day,
+      xMin: cycleDay, xMax: cycleDay,
       borderColor: '#C4B8B0', borderWidth: 1.5, borderDash: [4, 4],
       label: { display: true, content: 'Today', position: 'start',
                backgroundColor: 'transparent', color: '#9C8F87', font: { size: 11 } }
